@@ -1,13 +1,18 @@
-name: 'use'
+name: Deploy Pipeline
 
 on:
-  push:
-    branches:
-      - main
-
-permissions:
-  pull-requests: write
+  workflow_dispatch:
 
 jobs:
-  compliance:
+  deploy_dev:
+    name: Deploy to Dev
     uses: notdodo/test-GHAs/.github/workflows/reuse.yaml@main
+    with:
+      environment: cane
+
+  deploy_prod:
+    name: Deploy to Prod
+    needs: deploy_dev
+    uses: notdodo/test-GHAs/.github/workflows/reuse.yaml@main
+    with:
+      environment: prod
