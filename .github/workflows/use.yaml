@@ -10,4 +10,5 @@ permissions:
 
 jobs:
   compliance:
+    environment: cane
     uses: notdodo/test-GHAs/.github/workflows/reuse.yaml@main
