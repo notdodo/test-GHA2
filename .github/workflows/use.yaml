@@ -1,7 +1,6 @@
 name: Deploy Pipeline
 
 on:
-  push:
   workflow_dispatch:
 
 jobs:
@@ -9,4 +8,6 @@ jobs:
     name: Deploy to Dev
     uses: notdodo/test-GHAs/.github/workflows/reuse.yaml@main
     with:
-      environment: cane
+      environment: dev
+    secrets:
+      PASSWORD: ${{ secrets.PASSWORD }}
