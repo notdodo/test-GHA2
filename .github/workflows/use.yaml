@@ -1,0 +1,13 @@
+name: 'use'
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  pull-requests: write
+
+jobs:
+  compliance:
+    uses: notdodo/test-GHAs/.github/workflows/reuse.yml@main
