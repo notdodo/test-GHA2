@@ -10,4 +10,4 @@ permissions:
 
 jobs:
   compliance:
-    uses: notdodo/test-GHAs/.github/workflows/reuse.yml@main
+    uses: notdodo/test-GHAs/.github/workflows/reuse.yaml@main
