@@ -9,10 +9,3 @@ jobs:
     uses: notdodo/test-GHAs/.github/workflows/reuse.yaml@main
     with:
       environment: cane
-
-  deploy_prod:
-    name: Deploy to Prod
-    needs: deploy_dev
-    uses: notdodo/test-GHAs/.github/workflows/reuse.yaml@main
-    with:
-      environment: prod
