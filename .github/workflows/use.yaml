@@ -1,4 +1,4 @@
-name: Deploy Pipeline
+name: esatto
 
 on:
   workflow_dispatch:
@@ -7,8 +7,4 @@ on:
 jobs:
   deploy_dev:
     name: Deploy to Dev
-    uses: notdodo/test-GHAs/.github/workflows/reuse.yaml@main
-    with:
-      environment: testdev
-    secrets:
-      PASSWORD: ${{ secrets.PASSWORD }}
+    uses: notdodo/test-GHAs/.github/workflows/gitleaks.yml@gitleaks-v0.0.1
