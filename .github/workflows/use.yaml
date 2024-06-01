@@ -7,4 +7,4 @@ on:
 jobs:
   deploy_dev:
     name: Deploy to Dev
-    uses: notdodo/test-GHAs/.github/workflows/gitleaks.yml@gitleaks-v0.0.1
+    uses: notdodo/test-GHAs/.github/workflows/gitleaks.yml@gitleaks-v0.0.2
