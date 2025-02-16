@@ -12,8 +12,8 @@ jobs:
   cleanup:
     name: Cleanup caches for a merged branch
     runs-on: ${{ inputs.runs-on }}
-    permissions:
-      actions: write
+    # permissions:
+    #   actions: write
     steps:
       - name: Cleanup
         run: |
