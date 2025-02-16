@@ -1,0 +1,20 @@
+on:
+  workflow_call:
+    inputs:
+      disable-sudo:
+        type: boolean
+        default: true
+      runs-on:
+        type: string
+        default: "ubuntu-latest"
+
+jobs:
+  cleanup:
+    name: Cleanup caches for a merged branch
+    runs-on: ${{ inputs.runs-on }}
+    permissions:
+      actions: write
+    steps:
+      - name: Cleanup
+        run: |
+          echo "Hello from reusable!"
