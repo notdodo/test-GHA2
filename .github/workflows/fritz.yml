@@ -9,7 +9,7 @@ on:
         default: 5aa56a510183c23084990a6b4481708cad24c15b
   push:
     branches: [main]
-    paths: [.github/workflows/build-fritzing-macos-arm64.yml]
+    paths: [.github/workflows/fritz.yml]
 
 permissions:
   contents: read
@@ -184,7 +184,7 @@ jobs:
             -after 'QMAKE_APPLE_DEVICE_ARCHS=arm64' \
             "QMAKE_MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET"
           make -j3
-          lipo -verify_arch arm64 ../release64/Fritzing.app/Contents/MacOS/Fritzing
+          lipo ../release64/Fritzing.app/Contents/MacOS/Fritzing -verify_arch arm64
           lrelease phoenix.pro
 
       - name: Bundle runtime, parts and resources
@@ -231,7 +231,7 @@ jobs:
               kind = subprocess.check_output(['file', '-b', str(path)], text=True)
               if 'Mach-O' not in kind:
                   continue
-              subprocess.run(['lipo', '-verify_arch', 'arm64', str(path)], check=True)
+              subprocess.run(['lipo', str(path), '-verify_arch', 'arm64'], check=True)
               deps = subprocess.check_output(['otool', '-L', str(path)], text=True)
               for line in deps.splitlines()[1:]:
                   dep = line.strip().split(' (', 1)[0]
