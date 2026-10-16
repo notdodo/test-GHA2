@@ -126,4 +126,98 @@ jobs:
           cmake --install clipper-build
           cd ngspice-source
           CFLAGS='-O2 -arch arm64 -Wno-error=implicit-function-declaration -Wno-error=incompatible-function-pointer-types' \
+            LDFLAGS='-arch arm64' ./configure \
+            --prefix="$root/ngspice-42" --with-ngshared --enable-xspice \
+            --enable-cider --enable-relpath --disable-debug \
+            --without-x --with-readline=no
+          make -j3
+          make install
 
+      - name: Build Fritzing as ARM64 only
+        working-directory: src/fritzing-app
+        run: |
+          set -euo pipefail
+          test "$(qmake -query QT_VERSION)" = "$QT_VERSION"
+          qmake phoenix.pro "boost_root=$PWD/../boost_1_85_0" \
+            'CONFIG-=debug_and_release' 'CONFIG+=release' \
+            -after 'QMAKE_APPLE_DEVICE_ARCHS=arm64' \
+            "QMAKE_MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET"
+          make -j3
+          lipo -verify_arch arm64 ../release64/Fritzing.app/Contents/MacOS/Fritzing
+          lrelease phoenix.pro
+
+      - name: Bundle runtime, parts and resources
+        run: |
+          set -euo pipefail
+          mkdir -p dist
+          ditto src/release64/Fritzing.app dist/Fritzing.app
+          support="$PWD/dist/Fritzing.app/Contents/MacOS"
+          for item in sketches help translations; do
+            ditto "src/fritzing-app/$item" "$support/$item"
+          done
+          cp src/fritzing-app/INSTALL.txt src/fritzing-app/README.md src/fritzing-app/LICENSE* "$support/"
+          find "$support/translations" -name '*.ts' -delete
+          ditto src/fritzing-parts "$support/fritzing-parts"
+          rm -rf "$support/fritzing-parts/.git"
+          mkdir -p dist/Fritzing.app/Contents/lib/ngspice
+          cp -L src/ngspice-42/lib/libngspice.0.dylib dist/Fritzing.app/Contents/lib/
+          cp -L src/ngspice-42/lib/ngspice/*.cm dist/Fritzing.app/Contents/lib/ngspice/
+          macdeployqt dist/Fritzing.app -verbose=2 -always-overwrite \
+            "-libpath=$PWD/src/quazip-$QT_VERSION-1.4intuisphere/lib" \
+            "-libpath=$PWD/src/Clipper1-6.4.2/lib"
+          # Running the deployed executable verifies Qt/SQLite deployment too.
+          QT_QPA_PLATFORM=offscreen "$support/Fritzing" \
+            -f "$support" -parts "$support/fritzing-parts" \
+            -db "$support/fritzing-parts/parts.db"
+          test -s "$support/fritzing-parts/parts.db"
+          sqlite3 "$support/fritzing-parts/parts.db" 'PRAGMA integrity_check;' | grep -x ok
+          {
+            echo "Fritzing: $(git -C src/fritzing-app rev-parse HEAD)"
+            echo "Parts: $(git -C src/fritzing-parts rev-parse HEAD)"
+            echo "Qt: $QT_VERSION; architecture: arm64; minimum macOS: $MACOSX_DEPLOYMENT_TARGET"
+            cat src/source-archives.sha256
+          } > dist/BUILD-INFO.txt
+
+      - name: Audit, ad-hoc sign and archive
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import subprocess
+          for path in Path('dist/Fritzing.app').rglob('*'):
+              if not path.is_file() or path.is_symlink():
+                  continue
+              kind = subprocess.check_output(['file', '-b', str(path)], text=True)
+              if 'Mach-O' not in kind:
+                  continue
+              subprocess.run(['lipo', '-verify_arch', 'arm64', str(path)], check=True)
+              deps = subprocess.check_output(['otool', '-L', str(path)], text=True)
+              for line in deps.splitlines()[1:]:
+                  dep = line.strip().split(' (', 1)[0]
+                  if dep.startswith('/') and not dep.startswith(('/usr/lib/', '/System/Library/')):
+                      # A library's own install ID is not a dependency.
+                      ids = subprocess.check_output(['otool', '-D', str(path)], text=True).splitlines()[1:]
+                      if dep not in ids:
+                          raise SystemExit(f'Unbundled dependency in {path}: {dep}')
+          PY
+          codesign --force --deep --sign - dist/Fritzing.app
+          codesign --verify --deep --strict --verbose=2 dist/Fritzing.app
+          ditto -c -k --sequesterRsrc --keepParent dist/Fritzing.app dist/Fritzing-macos-arm64.zip
+          shasum -a 256 dist/Fritzing-macos-arm64.zip > dist/Fritzing-macos-arm64.zip.sha256
+          {
+            echo '## Fritzing for Apple Silicon'
+            echo 'Download the Fritzing-macos-arm64 artifact below and extract the app ZIP.'
+            echo 'Built for macOS 14 or newer. Ad-hoc signed; not Apple notarized.'
+            echo 'If Gatekeeper blocks the trusted build, use System Settings → Privacy & Security → Open Anyway.'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload application
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Fritzing-macos-arm64
+          path: |
+            dist/Fritzing-macos-arm64.zip
+            dist/Fritzing-macos-arm64.zip.sha256
+            dist/BUILD-INFO.txt
+          if-no-files-found: error
+          retention-days: 14
