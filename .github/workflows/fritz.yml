@@ -62,7 +62,7 @@ jobs:
           "$RUNNER_TEMP/aqt/bin/pip" install 'aqtinstall==3.3.0'
           "$RUNNER_TEMP/aqt/bin/aqt" install-qt mac desktop "$QT_VERSION" clang_64 \
             --outputdir "$RUNNER_TEMP/Qt" \
-            --modules qt5compat qtserialport qtsvg qtimageformats qttools
+            --modules qt5compat qtserialport qtimageformats
           echo "$RUNNER_TEMP/Qt/$QT_VERSION/macos/bin" >> "$GITHUB_PATH"
           echo "QT_ROOT=$RUNNER_TEMP/Qt/$QT_VERSION/macos" >> "$GITHUB_ENV"
 
