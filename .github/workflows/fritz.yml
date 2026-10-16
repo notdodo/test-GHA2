@@ -1,6 +1,3 @@
-
-    
-  
 name: Build Fritzing for macOS ARM64
 
 on:
