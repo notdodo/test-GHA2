@@ -218,7 +218,7 @@ jobs:
             "-libpath=$PWD/src/Clipper1-6.4.2/lib"
           test -f dist/Fritzing.app/Contents/Frameworks/QtCore5Compat.framework/Versions/A/QtCore5Compat
           # Running the deployed executable verifies Qt/SQLite deployment too.
-          QT_QPA_PLATFORM=offscreen "$support/Fritzing" \
+          QT_QPA_PLATFORM=cocoa "$support/Fritzing" \
             -f "$support" -parts "$support/fritzing-parts" \
             -db "$support/fritzing-parts/parts.db"
           test -s "$support/fritzing-parts/parts.db"
