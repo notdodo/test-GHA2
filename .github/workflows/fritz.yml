@@ -203,9 +203,20 @@ jobs:
           mkdir -p dist/Fritzing.app/Contents/lib/ngspice
           cp -L src/ngspice-42/lib/libngspice.0.dylib dist/Fritzing.app/Contents/lib/
           cp -L src/ngspice-42/lib/ngspice/*.cm dist/Fritzing.app/Contents/lib/ngspice/
+          # Only SQLite is needed; other SQL plugins require external runtimes.
+          test -f "$QT_ROOT/plugins/sqldrivers/libqsqlite.dylib"
+          find "$QT_ROOT/plugins/sqldrivers" \
+            -type f -name '*.dylib' ! -name 'libqsqlite.dylib' -delete
+          # Scan a bundled copy of QuaZip, including its QtCore5Compat dependency.
+          mkdir -p dist/Fritzing.app/Contents/Frameworks
+          quazip="$PWD/dist/Fritzing.app/Contents/Frameworks/libquazip1-qt6.1.4.0.dylib"
+          cp -L "src/quazip-$QT_VERSION-1.4intuisphere/lib/libquazip1-qt6.dylib" "$quazip"
           macdeployqt dist/Fritzing.app -verbose=2 -always-overwrite \
+            "-executable=$quazip" \
+            "-executable=$PWD/dist/Fritzing.app/Contents/lib/libngspice.0.dylib" \
             "-libpath=$PWD/src/quazip-$QT_VERSION-1.4intuisphere/lib" \
             "-libpath=$PWD/src/Clipper1-6.4.2/lib"
+          test -f dist/Fritzing.app/Contents/Frameworks/QtCore5Compat.framework/Versions/A/QtCore5Compat
           # Running the deployed executable verifies Qt/SQLite deployment too.
           QT_QPA_PLATFORM=offscreen "$support/Fritzing" \
             -f "$support" -parts "$support/fritzing-parts" \
