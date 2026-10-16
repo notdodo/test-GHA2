@@ -110,7 +110,7 @@ jobs:
             "-DCMAKE_INSTALL_PREFIX=$root/libgit2-1.7.1" \
             -DCMAKE_INSTALL_LIBDIR=lib -DBUILD_SHARED_LIBS=OFF -DBUILD_TESTS=OFF \
             -DBUILD_CLI=OFF -DUSE_SSH=OFF -DUSE_HTTPS=SecureTransport \
-            -DUSE_BUNDLED_ZLIB=ON -DREGEX_BACKEND=builtin
+            -DUSE_BUNDLED_ZLIB=OFF -DREGEX_BACKEND=builtin
           cmake --build libgit2-build
           cmake --install libgit2-build
           quazip_prefix="$root/quazip-$QT_VERSION-1.4intuisphere"
