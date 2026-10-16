@@ -188,6 +188,7 @@ jobs:
           lrelease phoenix.pro
 
       - name: Bundle runtime, parts and resources
+        timeout-minutes: 20
         run: |
           set -euo pipefail
           mkdir -p dist
@@ -199,7 +200,6 @@ jobs:
           cp src/fritzing-app/INSTALL.txt src/fritzing-app/README.md src/fritzing-app/LICENSE* "$support/"
           find "$support/translations" -name '*.ts' -delete
           ditto src/fritzing-parts "$support/fritzing-parts"
-          rm -rf "$support/fritzing-parts/.git"
           mkdir -p dist/Fritzing.app/Contents/lib/ngspice
           cp -L src/ngspice-42/lib/libngspice.0.dylib dist/Fritzing.app/Contents/lib/
           cp -L src/ngspice-42/lib/ngspice/*.cm dist/Fritzing.app/Contents/lib/ngspice/
@@ -211,18 +211,75 @@ jobs:
           mkdir -p dist/Fritzing.app/Contents/Frameworks
           quazip="$PWD/dist/Fritzing.app/Contents/Frameworks/libquazip1-qt6.1.4.0.dylib"
           cp -L "src/quazip-$QT_VERSION-1.4intuisphere/lib/libquazip1-qt6.dylib" "$quazip"
+          # macdeployqt normally selects Cocoa only. Include offscreen explicitly.
+          offscreen="$PWD/dist/Fritzing.app/Contents/PlugIns/platforms/libqoffscreen.dylib"
+          test -f "$QT_ROOT/plugins/platforms/libqoffscreen.dylib"
+          mkdir -p "$(dirname "$offscreen")"
+          cp -L "$QT_ROOT/plugins/platforms/libqoffscreen.dylib" "$offscreen"
           macdeployqt dist/Fritzing.app -verbose=2 -always-overwrite \
+            "-executable=$offscreen" \
             "-executable=$quazip" \
             "-executable=$PWD/dist/Fritzing.app/Contents/lib/libngspice.0.dylib" \
             "-libpath=$PWD/src/quazip-$QT_VERSION-1.4intuisphere/lib" \
             "-libpath=$PWD/src/Clipper1-6.4.2/lib"
           test -f dist/Fritzing.app/Contents/Frameworks/QtCore5Compat.framework/Versions/A/QtCore5Compat
-          # Running the deployed executable verifies Qt/SQLite deployment too.
-          QT_QPA_PLATFORM=cocoa "$support/Fritzing" \
-            -f "$support" -parts "$support/fritzing-parts" \
-            -db "$support/fritzing-parts/parts.db"
+          # Keep the parts Git metadata until database generation: Fritzing reads its SHA.
+          # Run without a GUI and bound execution even if an application dialog blocks.
+          export FRITZING_SUPPORT="$support"
+          python3 - <<'PY'
+          import os
+          from pathlib import Path
+          import signal
+          import subprocess
+          import time
+
+          support = Path(os.environ["FRITZING_SUPPORT"])
+          logs = Path("dist/diagnostics")
+          logs.mkdir(parents=True, exist_ok=True)
+          env = os.environ.copy()
+          env["QT_QPA_PLATFORM"] = "offscreen"
+          env["QT_DEBUG_PLUGINS"] = "1"
+          command = [
+              str(support / "Fritzing"), "--noopengl",
+              "-d", str(logs.resolve() / "fritzing-debug.log"),
+              "-f", str(support), "-parts", str(support / "fritzing-parts"),
+              "-db", str(support / "fritzing-parts/parts.db"),
+          ]
+          started = time.monotonic()
+          with (logs / "fritzing-console.log").open("w") as output:
+              process = subprocess.Popen(
+                  command, env=env, stdout=output,
+                  stderr=subprocess.STDOUT, start_new_session=True,
+              )
+              try:
+                  while True:
+                      try:
+                          code = process.wait(timeout=30)
+                          break
+                      except subprocess.TimeoutExpired:
+                          elapsed = int(time.monotonic() - started)
+                          print(f"Generating parts database: {elapsed}s elapsed", flush=True)
+                          if elapsed >= 600:
+                              subprocess.run(
+                                  ["sample", str(process.pid), "5", "-file",
+                                   str(logs / "fritzing-sample.txt")],
+                                  timeout=15, check=False,
+                              )
+                              raise TimeoutError("Database generation exceeded 600 seconds")
+              except BaseException:
+                  os.killpg(process.pid, signal.SIGKILL)
+                  process.wait()
+                  raise
+              finally:
+                  for path in sorted(logs.glob("*.log")):
+                      print(f"--- {path.name} (last 120 lines) ---", flush=True)
+                      print("\n".join(path.read_text(errors="replace").splitlines()[-120:]))
+          if code:
+              raise SystemExit(code)
+          PY
           test -s "$support/fritzing-parts/parts.db"
           sqlite3 "$support/fritzing-parts/parts.db" 'PRAGMA integrity_check;' | grep -x ok
+          rm -rf "$support/fritzing-parts/.git"
           {
             echo "Fritzing: $(git -C src/fritzing-app rev-parse HEAD)"
             echo "Parts: $(git -C src/fritzing-parts rev-parse HEAD)"
@@ -262,6 +319,15 @@ jobs:
             echo 'Built for macOS 14 or newer. Ad-hoc signed; not Apple notarized.'
             echo 'If Gatekeeper blocks the trusted build, use System Settings → Privacy & Security → Open Anyway.'
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload failure diagnostics
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: Fritzing-diagnostics
+          path: dist/diagnostics/
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Upload application
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
