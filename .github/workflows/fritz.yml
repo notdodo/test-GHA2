@@ -19,7 +19,8 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  QT_VERSION: 6.8.3
+  # Includes the upstream fix for the removed AGL framework in macOS 26 SDKs.
+  QT_VERSION: 6.9.2
   MACOSX_DEPLOYMENT_TARGET: '14.0'
   CMAKE_BUILD_PARALLEL_LEVEL: '3'
 
@@ -398,7 +399,7 @@ jobs:
             echo "Fritzing: $(git -C src/fritzing-app rev-parse HEAD)"
             echo "Parts: $(git -C src/fritzing-parts rev-parse HEAD)"
             echo "Local patch: CI-only fail-fast diagnostic hook in FMessageBox::exec"
-            echo "Compiler workaround: force-include arm_acle.h for Qt 6.8.3 on Xcode 26"
+            echo "Compiler workaround: force-include arm_acle.h for Qt $QT_VERSION on Xcode 26"
             echo "Qt: $QT_VERSION; architecture: arm64; minimum macOS: $MACOSX_DEPLOYMENT_TARGET"
             echo "Parts patch: repair 30 duplicate Nano replacement attributes; validate XML"
             echo "ngspice patch: remove illegal cppduals std::is_compound specialization"
