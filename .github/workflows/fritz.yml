@@ -262,7 +262,8 @@ jobs:
           set -euo pipefail
           mkdir -p dist
           ditto src/release64/Fritzing.app dist/Fritzing.app
-          support="$PWD/dist/Fritzing.app/Contents/MacOS"
+          # Keep data out of MacOS: codesign treats files there as nested code.
+          support="$PWD/dist/Fritzing.app/Contents/Resources"
           for item in sketches help translations; do
             ditto "src/fritzing-app/$item" "$support/$item"
           done
@@ -306,7 +307,7 @@ jobs:
           env = os.environ.copy()
           env["QT_QPA_PLATFORM"] = "offscreen"
           command = [
-              str(support / "Fritzing"), "--noopengl",
+              str(support.parent / "MacOS/Fritzing"), "--noopengl",
               "-f", str(support), "-parts", str(support / "fritzing-parts"),
               "-db", str(support / "fritzing-parts/parts.db"),
           ]
@@ -352,6 +353,9 @@ jobs:
           python3 - <<'PY'
           from pathlib import Path
           import subprocess
+          macos = Path('dist/Fritzing.app/Contents/MacOS')
+          if {path.name for path in macos.iterdir()} != {'Fritzing'}:
+              raise SystemExit('Only the application executable belongs in Contents/MacOS')
           for path in Path('dist/Fritzing.app').rglob('*'):
               if not path.is_file() or path.is_symlink():
                   continue
