@@ -26,7 +26,7 @@ env:
 jobs:
   build:
     # Standard Apple Silicon runner; no self-hosted Mac or Docker required.
-    runs-on: macos-15
+    runs-on: macos-latest
     timeout-minutes: 120
     defaults:
       run:
@@ -60,6 +60,67 @@ jobs:
 
       # Bump deps-v1 after changing dependency sources or build flags.
       # No restore-keys: never reuse binaries from a different ABI/toolchain.
+      - name: Repair known Nano XML defect and validate all parts
+        run: |
+          set -euo pipefail
+          mkdir -p dist/diagnostics
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+          import xml.etree.ElementTree as ET
+
+          root = Path("src/fritzing-parts")
+          path = root / "obsolete/Arduino Nano_v30.fzp"
+          target = ET.parse(root / "core/Arduino Nano3(fix).fzp").getroot()
+          targets = {c.attrib["id"]: c.attrib["name"]
+                     for c in target.findall("./connectors/connector")}
+          source = path.read_text()
+          changes = []
+
+          def normalize(name):
+              return name.upper().replace("/", "").replace("+", "").replace("RST", "RESET")
+
+          def repair(match):
+              tag = match.group(0)
+              values = re.findall(r' replacedby="([^"]*)"', tag)
+              if len(values) < 2:
+                  return tag
+              connector = re.search(r' id="([^"]+)"', tag).group(1)
+              name = re.search(r' name="([^"]+)"', tag).group(1)
+              # Prefer a real target connector ID. RESET/GND retain the male
+              # header mapping (18/19), rather than female ICSP pins (59/60).
+              candidates = [v for v in values if v in targets]
+              if not candidates:
+                  raise SystemExit(f"No valid replacement for {connector}: {values}")
+              chosen = candidates[0]
+              if normalize(name) not in {normalize(targets[chosen]), normalize(targets[chosen].split("/")[0])}:
+                  raise SystemExit(f"Pin mismatch: {connector} {name} -> {chosen} {targets[chosen]}")
+              changes.append(f"{connector} ({name}): {values} -> {chosen}")
+              tag = re.sub(r' replacedby="[^"]*"', "", tag)
+              return tag[:-1] + f' replacedby="{chosen}">'
+
+          fixed = re.sub(r"<connector\b[^>]*>", repair, source)
+          if len(changes) != 30:
+              raise SystemExit(f"Expected 30 known duplicate attributes, found {len(changes)}")
+          ET.fromstring(fixed)
+          path.write_text(fixed)
+          report = Path("dist/diagnostics/parts-validation.log")
+          errors = []
+          files = sorted(root.rglob("*.fzp"))
+          if not files:
+              raise SystemExit("No part files found")
+          for item in files:
+              try:
+                  ET.parse(item)
+              except (ET.ParseError, OSError) as error:
+                  errors.append(f"{item}: {error}")
+          text = "\n".join(changes + [f"Validated {len(files)} part XML files"] + errors) + "\n"
+          report.write_text(text)
+          print(text, flush=True)
+          if errors:
+              raise SystemExit(f"Invalid XML in {len(errors)} part files; see parts-validation.log")
+          PY
+
       - name: Cache Qt and compiled dependencies
         id: deps
         uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
@@ -190,9 +251,9 @@ jobs:
               // CI database generation must report errors instead of opening modal dialogs.
               // The environment switch is unset during normal application use.
               if (qEnvironmentVariableIsSet("FRITZING_CI_FAIL_ON_DIALOG")) {
-                  const QString diagnostic = level + ": " + title + "\\n"
-                      + "Text: " + text + "\\n"
-                      + "Informative Text: " + informativeText + "\\n"
+                  const QString diagnostic = level + ": " + title + "\n"
+                      + "Text: " + text + "\n"
+                      + "Informative Text: " + informativeText + "\n"
                       + "Detailed Text: " + detailedText;
                   qFatal("%s", qPrintable(diagnostic));
               }
@@ -314,6 +375,7 @@ jobs:
             echo "Parts: $(git -C src/fritzing-parts rev-parse HEAD)"
             echo "Local patch: CI-only fail-fast diagnostic hook in FMessageBox::exec"
             echo "Qt: $QT_VERSION; architecture: arm64; minimum macOS: $MACOSX_DEPLOYMENT_TARGET"
+            echo "Parts patch: repair 30 duplicate Nano replacement attributes; validate XML"
             cat src/source-archives.sha256
           } > dist/BUILD-INFO.txt
 
