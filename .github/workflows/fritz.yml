@@ -62,7 +62,6 @@ jobs:
       - name: Repair known Nano XML defect and validate all parts
         run: |
           set -euo pipefail
-          mkdir -p dist/diagnostics
           python3 - <<'PY'
           from pathlib import Path
           import re
@@ -103,7 +102,6 @@ jobs:
               raise SystemExit(f"Expected 30 known duplicate attributes, found {len(changes)}")
           ET.fromstring(fixed)
           path.write_text(fixed)
-          report = Path("dist/diagnostics/parts-validation.log")
           errors = []
           files = sorted(root.rglob("*.fzp"))
           if not files:
@@ -114,10 +112,9 @@ jobs:
               except (ET.ParseError, OSError) as error:
                   errors.append(f"{item}: {error}")
           text = "\n".join(changes + [f"Validated {len(files)} part XML files"] + errors) + "\n"
-          report.write_text(text)
           print(text, flush=True)
           if errors:
-              raise SystemExit(f"Invalid XML in {len(errors)} part files; see parts-validation.log")
+              raise SystemExit(f"Invalid XML in {len(errors)} part files")
           PY
 
       # Bump deps-v2 after changing dependency sources or build flags.
@@ -245,34 +242,6 @@ jobs:
           key: ${{ steps.deps.outputs.cache-primary-key }}
           path: *dependency-paths
 
-      - name: Make CI dialogs fail with their diagnostic text
-        working-directory: src/fritzing-app
-        run: |
-          set -euo pipefail
-          python3 - <<'PY'
-          from pathlib import Path
-
-          path = Path("src/utils/fmessagebox.cpp")
-          source = path.read_text()
-          anchor = "\tlogMessage(level + \": \" % title, aggregatedText);"
-          if source.count(anchor) != 1:
-              raise SystemExit("Unexpected FMessageBox source; refusing to patch")
-          replacement = anchor + r"""
-              // CI database generation must report errors instead of opening modal dialogs.
-              // The environment switch is unset during normal application use.
-              if (qEnvironmentVariableIsSet("FRITZING_CI_FAIL_ON_DIALOG")) {
-                  const QString diagnostic = level + ": " + title + "\n"
-                      + "Text: " + text + "\n"
-                      + "Informative Text: " + informativeText + "\n"
-                      + "Detailed Text: " + detailedText;
-                  qFatal("%s", qPrintable(diagnostic));
-              }
-          """
-          path.write_text(source.replace(anchor, replacement))
-          PY
-          git diff --check
-          git diff -- src/utils/fmessagebox.cpp
-
       - name: Build Fritzing as ARM64 only
         working-directory: src/fritzing-app
         run: |
@@ -332,50 +301,22 @@ jobs:
           import signal
           import sqlite3
           import subprocess
-          import time
 
           support = Path(os.environ["FRITZING_SUPPORT"])
-          logs = Path("dist/diagnostics")
-          logs.mkdir(parents=True, exist_ok=True)
           env = os.environ.copy()
           env["QT_QPA_PLATFORM"] = "offscreen"
-          env["QT_DEBUG_PLUGINS"] = "1"
-          env["FRITZING_CI_FAIL_ON_DIALOG"] = "1"
           command = [
               str(support / "Fritzing"), "--noopengl",
-              "-d", str(logs.resolve() / "fritzing-debug.log"),
               "-f", str(support), "-parts", str(support / "fritzing-parts"),
               "-db", str(support / "fritzing-parts/parts.db"),
           ]
-          started = time.monotonic()
-          with (logs / "fritzing-console.log").open("w") as output:
-              process = subprocess.Popen(
-                  command, env=env, stdout=output,
-                  stderr=subprocess.STDOUT, start_new_session=True,
-              )
-              try:
-                  while True:
-                      try:
-                          code = process.wait(timeout=30)
-                          break
-                      except subprocess.TimeoutExpired:
-                          elapsed = int(time.monotonic() - started)
-                          print(f"Generating parts database: {elapsed}s elapsed", flush=True)
-                          if elapsed >= 600:
-                              subprocess.run(
-                                  ["sample", str(process.pid), "5", "-file",
-                                   str(logs / "fritzing-sample.txt")],
-                                  timeout=15, check=False,
-                              )
-                              raise TimeoutError("Database generation exceeded 600 seconds")
-              except BaseException:
-                  os.killpg(process.pid, signal.SIGKILL)
-                  process.wait()
-                  raise
-              finally:
-                  for path in sorted(logs.glob("*.log")):
-                      print(f"--- {path.name} (last 120 lines) ---", flush=True)
-                      print("\n".join(path.read_text(errors="replace").splitlines()[-120:]))
+          process = subprocess.Popen(command, env=env, start_new_session=True)
+          try:
+              code = process.wait(timeout=600)
+          except BaseException:
+              os.killpg(process.pid, signal.SIGKILL)
+              process.wait()
+              raise
           if code:
               raise SystemExit(code)
           database_path = support / "fritzing-parts/parts.db"
@@ -398,7 +339,6 @@ jobs:
           {
             echo "Fritzing: $(git -C src/fritzing-app rev-parse HEAD)"
             echo "Parts: $(git -C src/fritzing-parts rev-parse HEAD)"
-            echo "Local patch: CI-only fail-fast diagnostic hook in FMessageBox::exec"
             echo "Compiler workaround: force-include arm_acle.h for Qt $QT_VERSION on Xcode 26"
             echo "Qt: $QT_VERSION; architecture: arm64; minimum macOS: $MACOSX_DEPLOYMENT_TARGET"
             echo "Parts patch: repair 30 duplicate Nano replacement attributes; validate XML"
@@ -438,15 +378,6 @@ jobs:
             echo 'Built for macOS 14 or newer. Ad-hoc signed; not Apple notarized.'
             echo 'If Gatekeeper blocks the trusted build, use System Settings → Privacy & Security → Open Anyway.'
           } >> "$GITHUB_STEP_SUMMARY"
-
-      - name: Upload failure diagnostics
-        if: failure()
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: Fritzing-diagnostics
-          path: dist/diagnostics/
-          if-no-files-found: ignore
-          retention-days: 7
 
       - name: Upload application
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
