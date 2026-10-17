@@ -287,6 +287,7 @@ jobs:
           test "$(qmake -query QT_VERSION)" = "$QT_VERSION"
           qmake phoenix.pro "boost_root=$PWD/../boost_1_85_0" \
             'CONFIG-=debug_and_release' 'CONFIG+=release' \
+            'QMAKE_CXXFLAGS+=-include arm_acle.h' \
             -after 'QMAKE_APPLE_DEVICE_ARCHS=arm64' \
             "QMAKE_MACOSX_DEPLOYMENT_TARGET=$MACOSX_DEPLOYMENT_TARGET"
           make -j3
@@ -391,6 +392,7 @@ jobs:
             echo "Fritzing: $(git -C src/fritzing-app rev-parse HEAD)"
             echo "Parts: $(git -C src/fritzing-parts rev-parse HEAD)"
             echo "Local patch: CI-only fail-fast diagnostic hook in FMessageBox::exec"
+            echo "Compiler workaround: force-include arm_acle.h for Qt 6.8.3 on Xcode 26"
             echo "Qt: $QT_VERSION; architecture: arm64; minimum macOS: $MACOSX_DEPLOYMENT_TARGET"
             echo "Parts patch: repair 30 duplicate Nano replacement attributes; validate XML"
             echo "ngspice patch: remove illegal cppduals std::is_compound specialization"
