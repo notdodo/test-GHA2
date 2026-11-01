@@ -121,7 +121,7 @@ jobs:
       # No restore-keys: never reuse binaries from a different ABI/toolchain.
       - name: Cache Qt and compiled dependencies
         id: deps
-        uses: actions/cache/restore@5a3ec84eff668545956fd18022155c47e93e2684 # v4.2.3
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           key: fritzing-deps-v2-${{ runner.os }}-${{ runner.arch }}-${{ steps.toolchain.outputs.xcode }}-sdk${{ steps.toolchain.outputs.sdk }}-qt${{ env.QT_VERSION }}-min${{ env.MACOSX_DEPLOYMENT_TARGET }}
           path: &dependency-paths |
