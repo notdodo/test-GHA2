@@ -44,7 +44,7 @@ jobs:
           echo "xcode=$(xcodebuild -version | tr '\n ' '--')" >> "$GITHUB_OUTPUT"
 
       - name: Check out Fritzing
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: fritzing/fritzing-app
           ref: ${{ inputs.fritzing_ref || '5aa56a510183c23084990a6b4481708cad24c15b' }}
@@ -52,7 +52,7 @@ jobs:
           persist-credentials: false
 
       - name: Check out matching parts snapshot
-        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: fritzing/fritzing-parts
           ref: e64ffe973e92176b989ab390ab668638a85ee305
